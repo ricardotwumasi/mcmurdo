@@ -34,6 +34,9 @@ jobs:
           NOTIFICATION_EMAIL: ${{ secrets.NOTIFICATION_EMAIL }}
         run: python -m pipeline.main
 
+      - name: Checkpoint SQLite WAL
+        run: python -c "import sqlite3; c=sqlite3.connect('data/jobs.sqlite'); c.execute('PRAGMA wal_checkpoint(TRUNCATE)'); c.close()"
+
       - name: Commit updated database
         run: |
           git config user.name "github-actions[bot]"

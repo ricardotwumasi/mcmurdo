@@ -245,6 +245,12 @@ def run_pipeline(dry_run: bool = False) -> dict:
         )
         raise
     finally:
+        # Force WAL checkpoint so all data is in the main database file
+        # (git only commits data/jobs.sqlite, not the -wal/-shm journals)
+        try:
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except Exception:
+            pass
         http_client.close()
         conn.close()
 
