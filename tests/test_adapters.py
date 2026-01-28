@@ -33,17 +33,14 @@ class TestJobsAcUkAdapter:
         result = JobsAcUkAdapter._extract_institution(entry)
         assert result is None
 
-    def test_build_queries_returns_list(self):
-        adapter = JobsAcUkAdapter()
-        queries = adapter._build_queries({"thematic": {"primary": ["psychology"]}})
-        assert isinstance(queries, list)
-        assert len(queries) > 0
+    def test_is_relevant_psychology(self):
+        assert JobsAcUkAdapter._is_relevant("Senior Lecturer in Psychology", {}) is True
 
-    def test_build_queries_capped(self):
-        adapter = JobsAcUkAdapter()
-        many_terms = {"thematic": {"primary": [f"term_{i}" for i in range(50)]}}
-        queries = adapter._build_queries(many_terms)
-        assert len(queries) <= 15
+    def test_is_relevant_non_psychology(self):
+        assert JobsAcUkAdapter._is_relevant("Professor of Mathematics", {}) is False
+
+    def test_is_relevant_clinical(self):
+        assert JobsAcUkAdapter._is_relevant("Clinical Research Fellow", {}) is True
 
 
 class TestHigherEdJobsAdapter:

@@ -1,13 +1,12 @@
 """HigherEdJobs RSS feed adapter.
 
-Searches HigherEdJobs for US-based academic psychology positions via RSS.
+Fetches HigherEdJobs category RSS feeds for US-based academic psychology positions.
 Strong coverage of Associate Professor and tenure-track roles.
 """
 
 from __future__ import annotations
 
 import logging
-from urllib.parse import quote_plus
 
 import feedparser
 import httpx
@@ -18,8 +17,15 @@ from pipeline.models import RawPosting
 
 logger = logging.getLogger(__name__)
 
-# HigherEdJobs RSS search endpoint
-_RSS_BASE = "https://www.higheredjobs.com/rss/rss.cfm"
+# HigherEdJobs category-based RSS feeds
+# The old /rss/rss.cfm?keyword= endpoint no longer works
+# Use /rss/categoryFeed.cfm?catID= with category IDs
+_CATEGORY_FEEDS = {
+    "Psychology": "https://www.higheredjobs.com/rss/categoryFeed.cfm?catID=91",
+    "School Psychology": "https://www.higheredjobs.com/rss/categoryFeed.cfm?catID=227",
+    "Educational Psychology": "https://www.higheredjobs.com/rss/categoryFeed.cfm?catID=226",
+    "Health Sciences": "https://www.higheredjobs.com/rss/categoryFeed.cfm?catID=68",
+}
 
 
 class HigherEdJobsAdapter(SourceAdapter):
@@ -33,18 +39,13 @@ class HigherEdJobsAdapter(SourceAdapter):
         http_client: httpx.Client,
         keywords: dict,
     ) -> list[RawPosting]:
-        """Collect postings from HigherEdJobs RSS feeds.
-
-        Runs keyword queries against the HigherEdJobs RSS search endpoint.
-        """
-        queries = self._build_queries(keywords)
+        """Collect postings from HigherEdJobs category RSS feeds."""
         seen_urls: set[str] = set()
         postings: list[RawPosting] = []
 
-        for query in queries:
-            url = f"{_RSS_BASE}?keyword={quote_plus(query)}&PosType=1"  # PosType=1 = Faculty
+        for category_name, feed_url in _CATEGORY_FEEDS.items():
             try:
-                xml_text = fetch_rss(http_client, url)
+                xml_text = fetch_rss(http_client, feed_url)
                 feed = feedparser.parse(xml_text)
 
                 for entry in feed.entries:
@@ -57,6 +58,11 @@ class HigherEdJobsAdapter(SourceAdapter):
                     summary = entry.get("summary", "").strip()
                     institution = self._extract_institution(entry)
 
+                    # For non-Psychology categories, filter by relevance
+                    if category_name != "Psychology":
+                        if not self._is_relevant(title):
+                            continue
+
                     postings.append(
                         RawPosting(
                             url=link,
@@ -67,29 +73,28 @@ class HigherEdJobsAdapter(SourceAdapter):
                             language="en",
                         )
                     )
+
+                logger.info(
+                    "HigherEdJobs %s feed: %d entries",
+                    category_name, len(feed.entries),
+                )
             except Exception as exc:
-                logger.error("HigherEdJobs query failed (%s): %s", query, exc)
+                logger.error(
+                    "HigherEdJobs %s feed failed: %s", category_name, exc,
+                )
 
         return postings
 
-    def _build_queries(self, keywords: dict) -> list[str]:
-        """Build search queries for HigherEdJobs.
-
-        Uses US-focused terminology.
-        """
-        queries = [
-            "psychology associate professor",
-            "psychology assistant professor",
-            "clinical psychology",
-            "health psychology",
-            "organizational psychology",
-            "industrial-organizational psychology",
-            "I-O psychology",
-            "psychosis research",
-            "behavior change",
-            "behavioral science",
+    @staticmethod
+    def _is_relevant(title: str) -> bool:
+        """Check if a non-Psychology category entry is relevant."""
+        title_lower = title.lower()
+        terms = [
+            "psycholog", "psychosis", "mental health", "behavior change",
+            "behaviour change", "clinical", "organizational",
+            "industrial-organizational", "i-o psychology",
         ]
-        return queries[:12]
+        return any(term in title_lower for term in terms)
 
     @staticmethod
     def _extract_institution(entry: dict) -> str | None:
@@ -98,12 +103,10 @@ class HigherEdJobsAdapter(SourceAdapter):
         HigherEdJobs often encodes the employer in the title as
         "Job Title - Institution Name" or in the author field.
         """
-        # Check author/publisher first
         author = entry.get("author", "")
         if author:
             return author.strip()
 
-        # Try splitting the title on " - "
         title = entry.get("title", "")
         if " - " in title:
             parts = title.rsplit(" - ", 1)

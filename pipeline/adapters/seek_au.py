@@ -2,6 +2,7 @@
 
 Scrapes Seek Australia for academic psychology positions.
 Seek is Australia's largest employment marketplace.
+Uses query-string based search URLs.
 """
 
 from __future__ import annotations
@@ -19,7 +20,16 @@ from pipeline.models import RawPosting
 logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://www.seek.com.au"
-_SEARCH_URL = f"{_BASE_URL}/psychology-jobs/in-All-Australia"
+
+# Seek search URLs using slug and query-string patterns
+_SEARCH_URLS = [
+    f"{_BASE_URL}/psychology-jobs",
+    f"{_BASE_URL}/psychology-university-jobs",
+    f"{_BASE_URL}/lecturer-psychology-jobs",
+    f"{_BASE_URL}/psychology-lecturer-jobs",
+    f"{_BASE_URL}/psychology-researcher-jobs",
+    f"{_BASE_URL}/clinical-psychology-jobs",
+]
 
 
 class SeekAuAdapter(SourceAdapter):
@@ -34,33 +44,19 @@ class SeekAuAdapter(SourceAdapter):
         keywords: dict,
     ) -> list[RawPosting]:
         """Collect postings from Seek.com.au."""
-        queries = self._build_queries(keywords)
         seen_urls: set[str] = set()
         postings: list[RawPosting] = []
 
-        for query in queries:
-            url = f"{_BASE_URL}/{quote_plus(query)}-jobs/in-All-Australia?classification=6281"
-            # classification=6281 = Education & Training
+        for url in _SEARCH_URLS:
             try:
                 html = fetch_html(http_client, url)
                 page_postings = self._parse_search_results(html, seen_urls)
                 postings.extend(page_postings)
+                logger.info("Seek AU %s: %d postings", url.split(".au/")[1], len(page_postings))
             except Exception as exc:
-                logger.error("Seek AU query failed (%s): %s", query, exc)
+                logger.error("Seek AU failed (%s): %s", url[:60], exc)
 
         return postings
-
-    def _build_queries(self, keywords: dict) -> list[str]:
-        """Build search queries for Seek Australia."""
-        return [
-            "psychology-lecturer",
-            "psychology-associate-professor",
-            "psychology-senior-lecturer",
-            "clinical-psychology",
-            "health-psychology",
-            "organisational-psychology",
-            "psychology-researcher",
-        ]
 
     def _parse_search_results(
         self, html: str, seen_urls: set[str]
@@ -70,7 +66,7 @@ class SeekAuAdapter(SourceAdapter):
         postings: list[RawPosting] = []
 
         # Seek uses article tags or data-attributes for job cards
-        for card in soup.select("article[data-card-type='JobCard'], .job-card, [data-job-id]"):
+        for card in soup.select("article[data-card-type='JobCard'], article, [data-job-id], [data-testid='job-card']"):
             link_tag = card.find("a", href=True)
             if not link_tag:
                 continue
@@ -79,6 +75,11 @@ class SeekAuAdapter(SourceAdapter):
             url = urljoin(_BASE_URL, href)
             if url in seen_urls:
                 continue
+
+            # Only include actual job links
+            if "/job/" not in url:
+                continue
+
             seen_urls.add(url)
 
             title = link_tag.get_text(strip=True)

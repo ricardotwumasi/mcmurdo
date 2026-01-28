@@ -2,12 +2,13 @@
 
 Scrapes academicpositions.com for EU and global academic psychology
 positions. Good coverage of Scandinavian and European roles.
+Uses path-based routing for search (not query parameters).
 """
 
 from __future__ import annotations
 
 import logging
-from urllib.parse import quote_plus, urljoin
+from urllib.parse import urljoin
 
 import httpx
 from bs4 import BeautifulSoup
@@ -19,7 +20,21 @@ from pipeline.models import RawPosting
 logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://academicpositions.com"
-_SEARCH_URL = f"{_BASE_URL}/find-jobs"
+
+# Academic Positions uses path-based routing for field/country filters
+_SEARCH_URLS = [
+    f"{_BASE_URL}/jobs/field/psychology",
+    f"{_BASE_URL}/jobs/field/applied-psychology",
+    f"{_BASE_URL}/jobs/field/health-psychology",
+    f"{_BASE_URL}/jobs/field/social-psychology",
+    f"{_BASE_URL}/jobs/field/cognitive-psychology",
+    f"{_BASE_URL}/jobs/field/neuropsychology",
+    f"{_BASE_URL}/jobs/field/behavioural-science",
+    f"{_BASE_URL}/jobs/field/psychology/country/united-kingdom",
+    f"{_BASE_URL}/jobs/field/psychology/country/denmark",
+    f"{_BASE_URL}/jobs/field/psychology/country/sweden",
+    f"{_BASE_URL}/jobs/field/psychology/country/norway",
+]
 
 
 class AcademicPositionsAdapter(SourceAdapter):
@@ -34,39 +49,19 @@ class AcademicPositionsAdapter(SourceAdapter):
         keywords: dict,
     ) -> list[RawPosting]:
         """Collect postings from academicpositions.com."""
-        queries = self._build_queries(keywords)
         seen_urls: set[str] = set()
         postings: list[RawPosting] = []
 
-        for query in queries:
-            url = f"{_SEARCH_URL}?query={quote_plus(query)}&field=psychology"
+        for url in _SEARCH_URLS:
             try:
                 html = fetch_html(http_client, url)
                 page_postings = self._parse_search_results(html, seen_urls)
                 postings.extend(page_postings)
+                logger.info("Academic Positions %s: %d postings", url.split("/field/")[1] if "/field/" in url else url, len(page_postings))
             except Exception as exc:
-                logger.error("Academic Positions query failed (%s): %s", query, exc)
+                logger.error("Academic Positions failed (%s): %s", url[:80], exc)
 
         return postings
-
-    def _build_queries(self, keywords: dict) -> list[str]:
-        """Build search queries for academicpositions.com."""
-        queries = [
-            "psychology",
-            "clinical psychology",
-            "health psychology",
-            "organisational psychology",
-            "associate professor psychology",
-            "senior lecturer psychology",
-            "lektor psykologi",
-            "docent psykologi",
-        ]
-        # Add Scandinavian terms
-        scandinavian = keywords.get("thematic", {}).get("scandinavian", [])
-        for term in scandinavian[:5]:
-            if term not in queries:
-                queries.append(term)
-        return queries[:12]
 
     def _parse_search_results(
         self, html: str, seen_urls: set[str]
@@ -75,7 +70,7 @@ class AcademicPositionsAdapter(SourceAdapter):
         soup = BeautifulSoup(html, "lxml")
         postings: list[RawPosting] = []
 
-        for card in soup.select(".job-card, .job-listing, .result-item, article"):
+        for card in soup.select(".job-card, .job-listing, .result-item, article, .list-group-item"):
             link_tag = card.find("a", href=True)
             if not link_tag:
                 continue
@@ -84,15 +79,19 @@ class AcademicPositionsAdapter(SourceAdapter):
             url = urljoin(_BASE_URL, href)
             if url in seen_urls:
                 continue
-            seen_urls.add(url)
 
             title = link_tag.get_text(strip=True)
             if not title or len(title) < 5:
                 continue
 
-            institution = self._extract_field(card, ".employer, .institution, .university")
-            location = self._extract_field(card, ".location, .country, .city")
-            deadline = self._extract_field(card, ".deadline, .closing-date, .date")
+            # Skip non-job links (navigation, etc.)
+            if "/jobs/" not in url and "/ad/" not in url:
+                continue
+
+            seen_urls.add(url)
+
+            institution = self._extract_field(card, ".employer, .institution, .university, .text-muted")
+            deadline = self._extract_field(card, ".deadline, .closing-date, .date, time")
 
             postings.append(
                 RawPosting(

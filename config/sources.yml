@@ -12,7 +12,7 @@ sources:
 
   higheredjobs:
     adapter: pipeline.adapters.higheredjobs
-    enabled: true
+    enabled: false  # Blocked by Incapsula bot protection; needs browser-level UA
     type: rss
     rate_limit_seconds: 2.0
     description: "HigherEdJobs RSS feed (US academic jobs)"
@@ -20,7 +20,7 @@ sources:
 
   psyccareers:
     adapter: pipeline.adapters.psyccareers
-    enabled: true
+    enabled: false  # Site URL structure changed; needs investigation
     type: html
     rate_limit_seconds: 3.0
     description: "APA PsycCareers HTML scrape (US psychology jobs)"
@@ -36,7 +36,7 @@ sources:
 
   academic_positions:
     adapter: pipeline.adapters.academic_positions
-    enabled: true
+    enabled: false  # Returns 403; bot protection requires browser-level access
     type: html
     rate_limit_seconds: 3.0
     description: "academicpositions.com HTML scrape (EU/global)"
@@ -60,7 +60,7 @@ sources:
 
   seek_au:
     adapter: pipeline.adapters.seek_au
-    enabled: true
+    enabled: false  # Returns 403; Imperva bot protection
     type: html
     rate_limit_seconds: 3.0
     description: "Seek.com.au academic HTML scrape (Australia)"

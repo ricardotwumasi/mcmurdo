@@ -18,8 +18,7 @@ from pipeline.models import RawPosting
 
 logger = logging.getLogger(__name__)
 
-# Jobindex RSS search endpoint
-_RSS_BASE = "https://www.jobindex.dk/jobsoegning/telecom-teledata/teledata/teledata.rss"
+# Jobindex RSS search endpoint (confirmed working)
 _SEARCH_RSS = "https://www.jobindex.dk/jobsoegning.rss"
 
 
@@ -44,7 +43,7 @@ class JobindexDkAdapter(SourceAdapter):
         postings: list[RawPosting] = []
 
         for query in queries:
-            url = f"{_SEARCH_RSS}?q={quote_plus(query)}&subid=18"  # subid=18 = Education/Research
+            url = f"{_SEARCH_RSS}?q={quote_plus(query)}"
             try:
                 xml_text = fetch_rss(http_client, url)
                 feed = feedparser.parse(xml_text)
@@ -66,9 +65,11 @@ class JobindexDkAdapter(SourceAdapter):
                             institution=institution,
                             source_id=self.source_id,
                             content_text=summary,
-                            language="da",  # Primarily Danish content
+                            language="da",
                         )
                     )
+
+                logger.info("Jobindex.dk query '%s': %d entries", query, len(feed.entries))
             except Exception as exc:
                 logger.error("Jobindex.dk query failed (%s): %s", query, exc)
 
@@ -91,7 +92,6 @@ class JobindexDkAdapter(SourceAdapter):
             "associate professor",
             "psykose",
         ]
-        # Add Scandinavian terms from config
         scandinavian = keywords.get("thematic", {}).get("scandinavian", [])
         for term in scandinavian:
             if term not in queries:
