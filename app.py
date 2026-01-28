@@ -49,10 +49,10 @@ app_ui = ui.page_navbar(
                 ui.input_select("region", "Region", choices=["All regions"]),
                 ui.input_select("rank", "Rank", choices=["All ranks"]),
                 ui.input_select("language", "Language", choices=["All languages"]),
-                ui.input_select("status", "Status", choices=[
-                    ("open", "Open"),
-                    ("closed", "Closed"),
-                ]),
+                ui.input_select("status", "Status", choices={
+                    "open": "Open",
+                    "closed": "Closed",
+                }),
                 ui.input_slider(
                     "min_relevance", "Min. relevance",
                     min=0, max=100, value=0, step=5, post="%",
