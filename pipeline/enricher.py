@@ -1,4 +1,4 @@
-"""Gemini 1.5 Flash enrichment engine for McMurdo.
+"""Gemini enrichment engine for McMurdo.
 
 Handles all Gemini API interactions:
 - Relevance classification
@@ -37,7 +37,7 @@ from pipeline.prompts import extraction, rank_fallback, relevance, synopsis
 logger = logging.getLogger(__name__)
 
 # Gemini model ID
-_MODEL_ID = "gemini-1.5-flash"
+_MODEL_ID = "gemini-2.5-flash-lite"
 
 
 def _get_client() -> genai.Client:

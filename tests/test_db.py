@@ -104,7 +104,7 @@ class TestEnrichments:
             posting_id=sample_posting.posting_id,
             task_type="relevance",
             prompt_version="v1",
-            model_id="gemini-1.5-flash",
+            model_id="gemini-2.5-flash-lite",
             input_hash="hash123",
             output_json='{"relevance_score": 0.9}',
         )

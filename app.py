@@ -120,7 +120,7 @@ app_ui = ui.page_navbar(
                 ),
                 ui.h4("Technology"),
                 ui.tags.ul(
-                    ui.tags.li("Pipeline: Python, httpx, feedparser, BeautifulSoup, Gemini 1.5 Flash"),
+                    ui.tags.li("Pipeline: Python, httpx, feedparser, BeautifulSoup, Gemini 2.5 Flash-Lite"),
                     ui.tags.li("Dashboard: Shiny for Python on Posit Connect Cloud"),
                     ui.tags.li("Storage: SQLite (committed to git)"),
                     ui.tags.li("CI/CD: GitHub Actions (crawl every 6 hours)"),

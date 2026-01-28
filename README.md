@@ -20,7 +20,7 @@ McMurdo is a small, opinionated system that continuously discovers, verifies, cl
                             (Shiny for Python)
 ```
 
-**Pipeline** (GitHub Actions) crawls eight international job sources every six hours, deduplicates postings, verifies they are still live, enriches them with Gemini 1.5 Flash (relevance scoring, structured extraction, English synopses for Scandinavian adverts), and sends an email digest via Resend.
+**Pipeline** (GitHub Actions) crawls eight international job sources every six hours, deduplicates postings, verifies they are still live, enriches them with Gemini 2.5 Flash-Lite (relevance scoring, structured extraction, English synopses for Scandinavian adverts), and sends an email digest via Resend.
 
 **Dashboard** (Shiny for Python on Posit Connect Cloud) reads the SQLite database and provides a filterable table of open postings with a detail pane showing Gemini rationale, structured fields, and topic tags.
 
@@ -79,7 +79,7 @@ Add these secrets in your repo Settings > Secrets and variables > Actions:
 
 | Secret | Purpose |
 |--------|---------|
-| `GEMINI_API_KEY` | Gemini 1.5 Flash enrichment |
+| `GEMINI_API_KEY` | Gemini 2.5 Flash-Lite enrichment |
 | `RESEND_API_KEY` | Email digest delivery |
 | `NOTIFICATION_EMAIL` | Recipient email address |
 
@@ -117,7 +117,7 @@ tests/                          Unit tests (69 tests)
 ## Technology
 
 - **Pipeline**: Python, httpx, feedparser, BeautifulSoup, lxml
-- **Enrichment**: Gemini 1.5 Flash via google-genai SDK
+- **Enrichment**: Gemini 2.5 Flash-Lite via google-genai SDK
 - **Deduplication**: url-normalize + rapidfuzz fuzzy matching
 - **Notifications**: Resend
 - **Dashboard**: Shiny for Python
