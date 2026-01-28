@@ -1,0 +1,67 @@
+# McMurdo keyword configuration
+# Used by source adapters to build search queries.
+# British English primary, with US/Australian alternatives for broad coverage.
+
+thematic:
+  primary:
+    - psychology
+    - psychologist
+    - clinical psychology
+    - health psychology
+    - organisational psychology
+    - organizational psychology        # US spelling
+    - occupational psychology
+    - work psychology
+    - industrial-organizational psychology  # US/IO
+    - I-O psychology
+    - psychosis
+    - schizophrenia
+    - early psychosis
+    - first episode psychosis
+    - clinical research
+    - behaviour change                 # UK
+    - behavior change                  # US
+    - mental health
+    - psychological science
+
+  secondary:
+    - cognitive psychology
+    - neuropsychology
+    - forensic psychology
+    - educational psychology
+    - developmental psychology
+    - social psychology
+    - applied psychology
+    - counselling psychology           # UK
+    - counseling psychology            # US
+
+  scandinavian:
+    - psykologi                        # Danish/Swedish/Norwegian
+    - psykolog
+    - klinisk psykologi
+    - helsepsykologi                   # Norwegian health psychology
+    - sundhedspsykologi                # Danish health psychology
+    - arbejdspsykologi                 # Danish work psychology
+    - organisationspsykologi           # Danish/Swedish
+    - psykose                          # Danish/Norwegian psychosis
+    - schizofreni                      # Danish/Swedish/Norwegian
+
+seniority:
+  target_titles:
+    - senior lecturer
+    - reader
+    - principal lecturer
+    - associate professor
+    - lektor                           # Danish/Swedish equivalent
+    - docent                           # Scandinavian senior academic
+    - universitetslektor               # Scandinavian university lecturer
+    - forsker                          # Danish/Norwegian researcher
+
+  adjacent_titles:
+    - lecturer
+    - assistant professor
+    - professor
+    - research fellow
+    - senior research fellow
+    - postdoctoral researcher
+    - adjunkt                          # Danish/Swedish junior lecturer

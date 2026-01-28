@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>McMurdo Job Digest</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 700px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background-color: #1a365d;
+            color: #fff;
+            padding: 20px;
+            border-radius: 8px 8px 0 0;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .header p {
+            margin: 5px 0 0;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        .content {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 0 0 8px 8px;
+        }
+        .posting {
+            border-bottom: 1px solid #e2e8f0;
+            padding: 16px 0;
+        }
+        .posting:last-child {
+            border-bottom: none;
+        }
+        .posting-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1a365d;
+            text-decoration: none;
+        }
+        .posting-title:hover {
+            text-decoration: underline;
+        }
+        .posting-meta {
+            font-size: 13px;
+            color: #666;
+            margin: 4px 0;
+        }
+        .posting-rationale {
+            font-size: 13px;
+            color: #555;
+            margin-top: 6px;
+            font-style: italic;
+        }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .badge-score-high {
+            background-color: #c6f6d5;
+            color: #22543d;
+        }
+        .badge-score-medium {
+            background-color: #fefcbf;
+            color: #744210;
+        }
+        .badge-score-low {
+            background-color: #fed7d7;
+            color: #742a2a;
+        }
+        .badge-seniority {
+            background-color: #bee3f8;
+            color: #2a4365;
+        }
+        .badge-rank {
+            background-color: #e9d8fd;
+            color: #44337a;
+        }
+        .footer {
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+            margin-top: 20px;
+            padding: 10px;
+        }
+        .footer a {
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>McMurdo Job Digest</h1>
+        <p>{{ postings|length }} new academic psychology posting{{ 's' if postings|length != 1 else '' }}</p>
+    </div>
+    <div class="content">
+        {% for posting in postings %}
+        <div class="posting">
+            <a href="{{ posting.url_original }}" class="posting-title">
+                {{ posting.job_title or posting.url_original }}
+            </a>
+            <div class="posting-meta">
+                {% if posting.institution %}{{ posting.institution }}{% endif %}
+                {% if posting.city or posting.country %}
+                    &mdash;
+                    {% if posting.city %}{{ posting.city }}{% endif %}{% if posting.city and posting.country %}, {% endif %}{% if posting.country %}{{ posting.country }}{% endif %}
+                {% endif %}
+            </div>
+            <div class="posting-meta">
+                {% if posting.relevance_score %}
+                    {% if posting.relevance_score >= 0.7 %}
+                        <span class="badge badge-score-high">{{ '%.0f'|format(posting.relevance_score * 100) }}% match</span>
+                    {% elif posting.relevance_score >= 0.5 %}
+                        <span class="badge badge-score-medium">{{ '%.0f'|format(posting.relevance_score * 100) }}% match</span>
+                    {% else %}
+                        <span class="badge badge-score-low">{{ '%.0f'|format(posting.relevance_score * 100) }}% match</span>
+                    {% endif %}
+                {% endif %}
+                {% if posting.seniority_match %}
+                    <span class="badge badge-seniority">Seniority match</span>
+                {% endif %}
+                {% if posting.rank_bucket and posting.rank_bucket != 'other' %}
+                    <span class="badge badge-rank">{{ posting.rank_bucket | replace('_', ' ') | title }}</span>
+                {% endif %}
+                {% if posting.closing_date %}
+                    &middot; Closes: {{ posting.closing_date }}
+                {% endif %}
+            </div>
+            {% if posting.relevance_rationale %}
+                <div class="posting-rationale">{{ posting.relevance_rationale }}</div>
+            {% endif %}
+            {% if posting.synopsis %}
+                <div class="posting-rationale">{{ posting.synopsis[:200] }}{% if posting.synopsis|length > 200 %}...{% endif %}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    <div class="footer">
+        <p>
+            Sent by <a href="https://github.com/ricardotwumasi/mcmurdo">McMurdo</a> &mdash;
+            Academic Psychology Job Discovery
+        </p>
+    </div>
+</body>
+</html>

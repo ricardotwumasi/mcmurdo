@@ -1,0 +1,46 @@
+# McMurdo global settings
+
+pipeline:
+  # Maximum Gemini API calls per pipeline run
+  gemini_call_cap: 200
+  # Minimum relevance score to include in email digest
+  relevance_threshold: 0.3
+  # Number of days before a posting is considered expired
+  expiry_days: 90
+  # User agent string for HTTP requests
+  user_agent: "McMurdo/1.0 (Academic Job Discovery; +https://github.com/ricardotwumasi/mcmurdo)"
+
+deduplication:
+  # Fuzzy match threshold for title+organisation (0-100)
+  fuzzy_threshold: 85
+  # URL normalisation: strip these query parameters
+  strip_params:
+    - utm_source
+    - utm_medium
+    - utm_campaign
+    - utm_content
+    - utm_term
+    - ref
+    - fbclid
+    - gclid
+
+gemini:
+  model: "gemini-1.5-flash"
+  # Temperature for classification tasks
+  classification_temperature: 0.1
+  # Temperature for synopsis generation
+  synopsis_temperature: 0.3
+  # Maximum tokens for structured extraction
+  max_output_tokens: 2048
+
+email:
+  sender: "onboarding@resend.dev"
+  subject_prefix: "[McMurdo]"
+  # Maximum postings per digest email
+  max_per_digest: 50
+  # Only send digest if there are at least this many new postings
+  min_for_digest: 1
+
+database:
+  path: "data/jobs.sqlite"
+  wal_mode: true

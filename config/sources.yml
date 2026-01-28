@@ -1,0 +1,67 @@
+# McMurdo source adapter registry
+# Each source has an adapter module, enable flag, and rate limit.
+
+sources:
+  jobs_ac_uk:
+    adapter: pipeline.adapters.jobs_ac_uk
+    enabled: true
+    type: rss
+    rate_limit_seconds: 2.0
+    description: "jobs.ac.uk RSS feed (UK academic jobs)"
+    base_url: "https://www.jobs.ac.uk"
+
+  higheredjobs:
+    adapter: pipeline.adapters.higheredjobs
+    enabled: true
+    type: rss
+    rate_limit_seconds: 2.0
+    description: "HigherEdJobs RSS feed (US academic jobs)"
+    base_url: "https://www.higheredjobs.com"
+
+  psyccareers:
+    adapter: pipeline.adapters.psyccareers
+    enabled: true
+    type: html
+    rate_limit_seconds: 3.0
+    description: "APA PsycCareers HTML scrape (US psychology jobs)"
+    base_url: "https://www.psyccareers.com"
+
+  euraxess:
+    adapter: pipeline.adapters.euraxess
+    enabled: true
+    type: html
+    rate_limit_seconds: 3.0
+    description: "EURAXESS HTML scrape (EU research jobs)"
+    base_url: "https://euraxess.ec.europa.eu"
+
+  academic_positions:
+    adapter: pipeline.adapters.academic_positions
+    enabled: true
+    type: html
+    rate_limit_seconds: 3.0
+    description: "academicpositions.com HTML scrape (EU/global)"
+    base_url: "https://academicpositions.com"
+
+  jobindex_dk:
+    adapter: pipeline.adapters.jobindex_dk
+    enabled: true
+    type: rss
+    rate_limit_seconds: 2.0
+    description: "Jobindex.dk RSS feed (Danish jobs)"
+    base_url: "https://www.jobindex.dk"
+
+  scandinavian_universities:
+    adapter: pipeline.adapters.scandinavian_universities
+    enabled: true
+    type: html
+    rate_limit_seconds: 3.0
+    description: "Swedish/Norwegian university job pages"
+    base_url: null
+
+  seek_au:
+    adapter: pipeline.adapters.seek_au
+    enabled: true
+    type: html
+    rate_limit_seconds: 3.0
+    description: "Seek.com.au academic HTML scrape (Australia)"
+    base_url: "https://www.seek.com.au"

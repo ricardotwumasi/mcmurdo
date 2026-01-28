@@ -1,0 +1,49 @@
+# McMurdo rank mapping configuration
+# Maps job titles to standardised rank buckets using regex patterns.
+# Patterns are case-insensitive, tested in order (first match wins).
+# Gemini fallback is used when no pattern matches.
+
+rank_buckets:
+  associate_professor:
+    label: "Associate Professor"
+    target: true
+    patterns:
+      - "\\bassociate\\s+professor\\b"
+      - "\\breader\\b(?!.*\\bservices\\b)"
+      - "\\bsenior\\s+lecturer\\b"
+      - "\\bprincipal\\s+lecturer\\b"
+      - "\\bdocent\\b"
+      - "\\blektor\\b(?!.*\\badjunkt\\b)"
+      - "\\buniversitetslektor\\b"
+
+  assistant_professor:
+    label: "Assistant Professor"
+    patterns:
+      - "\\bassistant\\s+professor\\b"
+      - "\\blecturer\\b(?!.*\\b(senior|principal))"
+      - "\\badjunkt\\b"
+      - "\\bjunior\\s+lecturer\\b"
+
+  research_fellow:
+    label: "Research Fellow"
+    patterns:
+      - "\\bresearch\\s+fellow\\b"
+      - "\\bsenior\\s+research\\s+fellow\\b"
+      - "\\bforsker\\b"
+      - "\\bseniorforsker\\b"
+
+  postdoc:
+    label: "Postdoctoral"
+    patterns:
+      - "\\bpost[- ]?doc(toral)?\\b"
+      - "\\bpostdoc\\b"
+
+  professor:
+    label: "Professor"
+    patterns:
+      - "\\bprofessor\\b"
+      - "\\bprofessorship\\b"
+
+  other:
+    label: "Other"
+    patterns: []

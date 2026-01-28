@@ -1,0 +1,1 @@
+# McMurdo source adapters package
