@@ -1,29 +1,35 @@
-"""Nature Careers RSS adapter.
+"""Nature Careers HTML scraper.
 
-Searches Nature Careers for research and academic positions in
+Scrapes Nature Careers for research and academic positions in
 psychology, neuroscience, and health sciences.
 """
 
 from __future__ import annotations
 
 import logging
+from urllib.parse import urljoin
 
-import feedparser
 import httpx
+from bs4 import BeautifulSoup
 
 from pipeline.adapters.base import SourceAdapter
-from pipeline.http_client import fetch_rss
+from pipeline.http_client import fetch_html
 from pipeline.models import RawPosting
 
 logger = logging.getLogger(__name__)
 
-# Nature Careers RSS feeds
-# The main feed covers all disciplines; we filter by keywords
-_FEED_URL = "https://www.nature.com/naturecareers/rss/jobs"
+# Nature Careers search URLs
+_SEARCH_URLS = [
+    "https://www.nature.com/naturecareers/jobs/search?keywords=psychology",
+    "https://www.nature.com/naturecareers/jobs/search?keywords=mental+health",
+    "https://www.nature.com/naturecareers/jobs/search?keywords=clinical+psychology",
+]
+
+_BASE_URL = "https://www.nature.com"
 
 
 class NatureCareersAdapter(SourceAdapter):
-    """Adapter for Nature Careers RSS feed."""
+    """Adapter for Nature Careers HTML scraping."""
 
     source_id = "nature_careers"
     source_name = "Nature Careers"
@@ -33,53 +39,92 @@ class NatureCareersAdapter(SourceAdapter):
         http_client: httpx.Client,
         keywords: dict,
     ) -> list[RawPosting]:
-        """Collect postings from Nature Careers RSS feed.
-
-        Fetches the main jobs feed and filters entries by
-        psychology/health-related keywords.
-        """
+        """Scrape job listings from Nature Careers search pages."""
+        seen_urls: set[str] = set()
         postings: list[RawPosting] = []
 
-        try:
-            xml_text = fetch_rss(http_client, _FEED_URL)
-            feed = feedparser.parse(xml_text)
+        for search_url in _SEARCH_URLS:
+            try:
+                html = fetch_html(http_client, search_url)
+                page_postings = self._parse_listings(html)
 
-            for entry in feed.entries:
-                link = entry.get("link", "").strip()
-                if not link:
+                for posting in page_postings:
+                    if posting.url in seen_urls:
+                        continue
+                    seen_urls.add(posting.url)
+
+                    # Filter by relevance
+                    if not self._is_relevant(posting.title or "", posting.content_text or ""):
+                        continue
+
+                    postings.append(posting)
+
+                logger.info("Nature Careers %s: found %d listings", search_url, len(page_postings))
+            except Exception as exc:
+                logger.error("Nature Careers failed (%s): %s", search_url, exc)
+
+        logger.info("Nature Careers: collected %d postings total", len(postings))
+        return postings
+
+    def _parse_listings(self, html: str) -> list[RawPosting]:
+        """Parse job listings from Nature Careers HTML."""
+        soup = BeautifulSoup(html, "lxml")
+        postings: list[RawPosting] = []
+
+        # Find all job items in the listing
+        for item in soup.select("ul#listing .lister__item"):
+            try:
+                # Get job title and link
+                title_elem = item.select_one("h3.lister__header a")
+                if not title_elem:
                     continue
 
-                title = entry.get("title", "").strip()
-                summary = entry.get("summary", entry.get("description", "")).strip()
-
-                # Filter by relevance
-                if not self._is_relevant(title, summary, keywords):
+                title = title_elem.get_text(strip=True)
+                href = title_elem.get("href", "").strip()
+                if not href:
                     continue
 
-                institution = self._extract_institution(entry, title)
+                url = urljoin(_BASE_URL, href.split("?")[0])  # Remove tracking params
+
+                # Get employer/institution
+                employer_elem = item.select_one(".lister__meta-item--recruiter")
+                institution = employer_elem.get_text(strip=True) if employer_elem else None
+
+                # Get location
+                location_elem = item.select_one(".lister__meta-item--location")
+                location = location_elem.get_text(strip=True) if location_elem else None
+
+                # Get salary if available
+                salary_elem = item.select_one(".lister__meta-item--salary")
+                salary = salary_elem.get_text(strip=True) if salary_elem else None
+
+                content_parts = [title]
+                if institution:
+                    content_parts.append(institution)
+                if location:
+                    content_parts.append(location)
+                if salary:
+                    content_parts.append(salary)
 
                 postings.append(
                     RawPosting(
-                        url=link,
+                        url=url,
                         title=title,
                         institution=institution,
                         source_id=self.source_id,
-                        content_text=summary,
+                        content_text=". ".join(content_parts),
                         language="en",
                     )
                 )
-
-            logger.info("Nature Careers: %d entries, %d matched filters",
-                       len(feed.entries), len(postings))
-        except Exception as exc:
-            logger.error("Nature Careers feed failed: %s", exc)
+            except Exception as exc:
+                logger.debug("Failed to parse Nature Careers job item: %s", exc)
 
         return postings
 
     @staticmethod
-    def _is_relevant(title: str, summary: str, keywords: dict) -> bool:
-        """Check if entry is relevant to psychology/health research."""
-        text_lower = f"{title} {summary}".lower()
+    def _is_relevant(title: str, content: str) -> bool:
+        """Check if listing is relevant to psychology/health research."""
+        text_lower = f"{title} {content}".lower()
 
         # Primary relevance terms
         relevance_terms = [
@@ -98,34 +143,3 @@ class NatureCareersAdapter(SourceAdapter):
         ]
 
         return any(term in text_lower for term in relevance_terms)
-
-    @staticmethod
-    def _extract_institution(entry: dict, title: str) -> str | None:
-        """Try to extract institution from RSS entry.
-
-        Nature Careers often has institution in author or category fields.
-        """
-        # Check author field
-        author = entry.get("author", "")
-        if author:
-            return author.strip()
-
-        # Check for dc:creator
-        creator = entry.get("creator", "")
-        if creator:
-            return creator.strip()
-
-        # Try category field (sometimes contains institution)
-        categories = entry.get("tags", [])
-        for cat in categories:
-            term = cat.get("term", "")
-            if "university" in term.lower() or "institute" in term.lower():
-                return term.strip()
-
-        # Try to extract from title
-        if " at " in title:
-            parts = title.split(" at ", 1)
-            if len(parts) == 2:
-                return parts[1].strip()
-
-        return None

@@ -4,18 +4,18 @@
 sources:
   times_higher_ed:
     adapter: pipeline.adapters.times_higher_ed
-    enabled: false  # RSS feeds no longer available; needs HTML scraper
-    type: rss
-    rate_limit_seconds: 2.0
-    description: "Times Higher Education Jobs RSS (UK/international academic)"
+    enabled: true
+    type: html
+    rate_limit_seconds: 3.0
+    description: "Times Higher Education Jobs (UK/international academic)"
     base_url: "https://www.timeshighereducation.com/unijobs"
 
   nature_careers:
     adapter: pipeline.adapters.nature_careers
-    enabled: false  # No RSS feed for job listings; needs HTML scraper
-    type: rss
-    rate_limit_seconds: 2.0
-    description: "Nature Careers RSS (research/academic positions)"
+    enabled: true
+    type: html
+    rate_limit_seconds: 3.0
+    description: "Nature Careers (research/academic positions)"
     base_url: "https://www.nature.com/naturecareers"
 
   jobs_ac_uk:
