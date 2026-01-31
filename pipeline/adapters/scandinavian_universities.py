@@ -66,7 +66,7 @@ _UNIVERSITIES = [
     {
         "name": "Aarhus University",
         "country": "DK",
-        "url": "https://international.au.dk/about/vacancies",
+        "url": "https://international.au.dk/about/profile/vacant-positions",
         "lang": "da",
     },
     {
