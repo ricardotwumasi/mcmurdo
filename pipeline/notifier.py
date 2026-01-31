@@ -60,6 +60,7 @@ def send_digest(
     max_postings: int = 50,
     min_relevance: float = 0.3,
     dry_run: bool = False,
+    force: bool = False,
 ) -> int:
     """Build and send an email digest of new postings.
 
@@ -69,10 +70,14 @@ def send_digest(
         max_postings: Maximum postings to include.
         min_relevance: Minimum relevance score for inclusion.
         dry_run: If True, log but do not actually send.
+        force: If True, send digest regardless of any interval checks.
+               Used for scheduled Monday morning deliveries.
 
     Returns:
         Number of postings included in the digest (0 if nothing to send).
     """
+    if force:
+        logger.info("Force flag set -- will send digest if postings available")
     # Fetch postings not yet emailed
     postings = db.get_postings_for_digest(conn, limit=max_postings)
 

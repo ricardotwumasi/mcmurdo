@@ -1,6 +1,6 @@
-"""Gemini enrichment engine for McMurdo.
+"""LLM enrichment engine for McMurdo.
 
-Handles all Gemini API interactions:
+Handles all LLM API interactions via OpenRouter:
 - Relevance classification
 - Structured field extraction
 - English synopsis for non-English adverts
@@ -16,11 +16,11 @@ import hashlib
 import json
 import logging
 import os
+import re
 import sqlite3
 from typing import Optional
 
-from google import genai
-from google.genai import types
+from openai import OpenAI
 
 from pipeline import db
 from pipeline.models import (
@@ -36,16 +36,21 @@ from pipeline.prompts import extraction, rank_fallback, relevance, synopsis
 
 logger = logging.getLogger(__name__)
 
-# Gemini model ID
-_MODEL_ID = "gemini-2.5-flash-lite"
+# OpenRouter model configuration
+_PRIMARY_MODEL = "tngtech/deepseek-r1t2-chimera:free"
+_FALLBACK_MODEL = "google/gemma-3-27b-it:free"
+_MODEL_ID = _PRIMARY_MODEL  # For cache/audit records
 
 
-def _get_client() -> genai.Client:
-    """Create a Gemini API client."""
-    api_key = os.environ.get("GEMINI_API_KEY")
+def _get_client() -> OpenAI:
+    """Create an OpenRouter API client (OpenAI-compatible)."""
+    api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
-        raise RuntimeError("GEMINI_API_KEY environment variable not set")
-    return genai.Client(api_key=api_key)
+        raise RuntimeError("OPENROUTER_API_KEY environment variable not set")
+    return OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=api_key,
+    )
 
 
 def _compute_input_hash(prompt_version: str, text: str) -> str:
@@ -54,47 +59,74 @@ def _compute_input_hash(prompt_version: str, text: str) -> str:
     return hashlib.sha256(combined.encode("utf-8")).hexdigest()
 
 
-def _call_gemini(
-    client: genai.Client,
+def _extract_json_from_response(text: str) -> str:
+    """Extract JSON from response text, handling markdown code blocks.
+
+    Some models wrap JSON in markdown code fences like ```json ... ```.
+    This function extracts the raw JSON.
+    """
+    # Try to find JSON in markdown code block
+    code_block_match = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
+    if code_block_match:
+        return code_block_match.group(1).strip()
+    # Return as-is if no code block found
+    return text.strip()
+
+
+def _call_llm(
+    client: OpenAI,
     prompt: str,
     temperature: float = 0.1,
-    response_schema: Optional[type] = None,
 ) -> str:
-    """Call Gemini and return the response text.
+    """Call LLM via OpenRouter and return the response text.
+
+    Tries the primary model first, falls back to secondary on failure.
 
     Args:
-        client: The Gemini API client.
+        client: The OpenAI-compatible API client.
         prompt: The full prompt text.
         temperature: Sampling temperature.
-        response_schema: Optional Pydantic model for structured output.
 
     Returns:
-        The raw response text from Gemini.
-    """
-    config = types.GenerateContentConfig(
-        temperature=temperature,
-        max_output_tokens=2048,
-        response_mime_type="application/json",
-    )
+        The raw response text from the LLM.
 
-    response = client.models.generate_content(
-        model=_MODEL_ID,
-        contents=prompt,
-        config=config,
-    )
-    return response.text
+    Raises:
+        RuntimeError: If all models fail.
+    """
+    last_error = None
+
+    for model in [_PRIMARY_MODEL, _FALLBACK_MODEL]:
+        try:
+            logger.debug("Trying model: %s", model)
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=temperature,
+                max_tokens=2048,
+            )
+            content = response.choices[0].message.content
+            if content:
+                return _extract_json_from_response(content)
+            raise ValueError("Empty response from model")
+        except Exception as e:
+            logger.warning("Model %s failed: %s", model, e)
+            last_error = e
+            if model == _FALLBACK_MODEL:
+                break
+
+    raise RuntimeError(f"All models failed. Last error: {last_error}")
 
 
 def _get_or_call(
     conn: sqlite3.Connection,
-    client: genai.Client,
+    client: OpenAI,
     posting_id: str,
     task_type: str,
     prompt_version: str,
     prompt_text: str,
     temperature: float = 0.1,
 ) -> str:
-    """Check cache, call Gemini if miss, store result.
+    """Check cache, call LLM if miss, store result.
 
     Returns the JSON output string.
     """
@@ -106,9 +138,9 @@ def _get_or_call(
         logger.debug("Cache hit for %s/%s", posting_id, task_type)
         return cached.output_json
 
-    # Call Gemini
-    logger.info("Calling Gemini for %s/%s", posting_id, task_type)
-    output_text = _call_gemini(client, prompt_text, temperature=temperature)
+    # Call LLM via OpenRouter
+    logger.info("Calling LLM for %s/%s", posting_id, task_type)
+    output_text = _call_llm(client, prompt_text, temperature=temperature)
 
     # Store in cache
     enrichment = Enrichment(
@@ -126,7 +158,7 @@ def _get_or_call(
 
 def enrich_relevance(
     conn: sqlite3.Connection,
-    client: genai.Client,
+    client: OpenAI,
     posting: Posting,
     advert_text: str,
 ) -> Optional[RelevanceResult]:
@@ -134,7 +166,7 @@ def enrich_relevance(
 
     Args:
         conn: Database connection.
-        client: Gemini API client.
+        client: OpenRouter API client.
         posting: The posting to classify.
         advert_text: The advert text to analyse.
 
@@ -159,7 +191,7 @@ def enrich_relevance(
 
 def enrich_extraction(
     conn: sqlite3.Connection,
-    client: genai.Client,
+    client: OpenAI,
     posting: Posting,
     advert_text: str,
 ) -> Optional[ExtractionResult]:
@@ -167,7 +199,7 @@ def enrich_extraction(
 
     Args:
         conn: Database connection.
-        client: Gemini API client.
+        client: OpenRouter API client.
         posting: The posting to extract from.
         advert_text: The advert text to parse.
 
@@ -192,7 +224,7 @@ def enrich_extraction(
 
 def enrich_synopsis(
     conn: sqlite3.Connection,
-    client: genai.Client,
+    client: OpenAI,
     posting: Posting,
     advert_text: str,
 ) -> Optional[SynopsisResult]:
@@ -200,7 +232,7 @@ def enrich_synopsis(
 
     Args:
         conn: Database connection.
-        client: Gemini API client.
+        client: OpenRouter API client.
         posting: The posting to summarise.
         advert_text: The non-English advert text.
 
@@ -225,14 +257,14 @@ def enrich_synopsis(
 
 def enrich_rank_fallback(
     conn: sqlite3.Connection,
-    client: genai.Client,
+    client: OpenAI,
     posting: Posting,
 ) -> Optional[RankFallbackResult]:
     """Classify a posting's rank when regex mapping fails.
 
     Args:
         conn: Database connection.
-        client: Gemini API client.
+        client: OpenRouter API client.
         posting: The posting with an ambiguous title.
 
     Returns:
@@ -259,7 +291,7 @@ def enrich_rank_fallback(
 
 def enrich_posting(
     conn: sqlite3.Connection,
-    client: genai.Client,
+    client: OpenAI,
     posting: Posting,
     advert_text: str,
 ) -> dict:
@@ -270,7 +302,7 @@ def enrich_posting(
 
     Args:
         conn: Database connection.
-        client: Gemini API client.
+        client: OpenRouter API client.
         posting: The posting to enrich.
         advert_text: The advert text content.
 
@@ -325,7 +357,7 @@ def enrich_posting(
             fallback = enrich_rank_fallback(conn, client, posting)
             if fallback:
                 updates["rank_bucket"] = fallback.rank_bucket
-                updates["rank_source"] = "gemini"
+                updates["rank_source"] = "llm"
                 tasks_run += 1
         else:
             updates["rank_bucket"] = rank

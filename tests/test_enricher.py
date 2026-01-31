@@ -1,6 +1,6 @@
 """Tests for the enricher module.
 
-Uses mocked Gemini responses to test enrichment logic without API calls.
+Uses mocked LLM responses to test enrichment logic without API calls.
 """
 
 import json
@@ -29,7 +29,7 @@ def mock_conn():
 
 @pytest.fixture
 def mock_client():
-    """Create a mock Gemini client."""
+    """Create a mock OpenRouter client."""
     client = MagicMock()
     return client
 
@@ -66,7 +66,7 @@ class TestInputHash:
 
 class TestEnrichRelevance:
     @patch("pipeline.enricher.db")
-    @patch("pipeline.enricher._call_gemini")
+    @patch("pipeline.enricher._call_llm")
     def test_returns_relevance_result(self, mock_call, mock_db, sample_posting):
         mock_db.get_cached_enrichment.return_value = None
         mock_call.return_value = json.dumps({
@@ -85,7 +85,7 @@ class TestEnrichRelevance:
         assert "Senior Lecturer" in result.rationale
 
     @patch("pipeline.enricher.db")
-    @patch("pipeline.enricher._call_gemini")
+    @patch("pipeline.enricher._call_llm")
     def test_returns_none_on_error(self, mock_call, mock_db, sample_posting):
         mock_db.get_cached_enrichment.return_value = None
         mock_call.side_effect = Exception("API error")
@@ -99,7 +99,7 @@ class TestEnrichRelevance:
 
 class TestEnrichExtraction:
     @patch("pipeline.enricher.db")
-    @patch("pipeline.enricher._call_gemini")
+    @patch("pipeline.enricher._call_llm")
     def test_returns_extraction_result(self, mock_call, mock_db, sample_posting):
         mock_db.get_cached_enrichment.return_value = None
         mock_call.return_value = json.dumps({
@@ -131,7 +131,7 @@ class TestEnrichExtraction:
 
 class TestEnrichSynopsis:
     @patch("pipeline.enricher.db")
-    @patch("pipeline.enricher._call_gemini")
+    @patch("pipeline.enricher._call_llm")
     def test_returns_synopsis_result(self, mock_call, mock_db, sample_posting):
         mock_db.get_cached_enrichment.return_value = None
         mock_call.return_value = json.dumps({
@@ -150,7 +150,7 @@ class TestEnrichSynopsis:
 
 class TestEnrichRankFallback:
     @patch("pipeline.enricher.db")
-    @patch("pipeline.enricher._call_gemini")
+    @patch("pipeline.enricher._call_llm")
     def test_returns_rank_result(self, mock_call, mock_db, sample_posting):
         mock_db.get_cached_enrichment.return_value = None
         mock_call.return_value = json.dumps({
