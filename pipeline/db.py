@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -354,3 +354,102 @@ def get_latest_pipeline_run(conn: sqlite3.Connection) -> Optional[PipelineRun]:
     if row:
         return PipelineRun(**dict(row))
     return None
+
+
+# -- Cleanup --
+
+def cleanup_database(conn: sqlite3.Connection, expiry_days: int = 90) -> dict:
+    """Run database maintenance to keep file size manageable.
+
+    Performs four operations:
+    1. NULL out content_html on all snapshots (historical cleanup).
+    2. Prune old snapshots -- keep only the most recent per posting.
+    3. Delete expired closed postings (and their child rows).
+    4. VACUUM to reclaim disk space.
+
+    Args:
+        conn: Database connection.
+        expiry_days: Number of days after which closed postings are expired.
+
+    Returns:
+        A stats dict with counts of rows affected.
+    """
+    stats = {
+        "html_nulled": 0,
+        "snapshots_pruned": 0,
+        "postings_expired": 0,
+    }
+
+    # 1. NULL out content_html on all snapshots
+    cursor = conn.execute(
+        "UPDATE posting_snapshots SET content_html = NULL WHERE content_html IS NOT NULL"
+    )
+    stats["html_nulled"] = cursor.rowcount
+    conn.commit()
+
+    # 2. Prune old snapshots -- keep only the most recent per posting
+    cursor = conn.execute(
+        """DELETE FROM posting_snapshots
+        WHERE snapshot_id NOT IN (
+            SELECT snapshot_id FROM (
+                SELECT snapshot_id,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY posting_id
+                           ORDER BY fetched_at DESC
+                       ) AS rn
+                FROM posting_snapshots
+            ) WHERE rn = 1
+        )"""
+    )
+    stats["snapshots_pruned"] = cursor.rowcount
+    conn.commit()
+
+    # 3. Delete expired closed postings and their child rows
+    cutoff = (datetime.utcnow() - timedelta(days=expiry_days)).isoformat()
+    expired_ids = [
+        row[0]
+        for row in conn.execute(
+            """SELECT posting_id FROM postings
+            WHERE open_status = 'closed'
+              AND (
+                  (closing_date IS NOT NULL AND closing_date < ?)
+                  OR (closing_date IS NULL AND last_seen_at < ?)
+              )""",
+            (cutoff, cutoff),
+        ).fetchall()
+    ]
+
+    if expired_ids:
+        placeholders = ",".join("?" for _ in expired_ids)
+        conn.execute(
+            f"DELETE FROM user_actions WHERE posting_id IN ({placeholders})",
+            expired_ids,
+        )
+        conn.execute(
+            f"DELETE FROM enrichments WHERE posting_id IN ({placeholders})",
+            expired_ids,
+        )
+        conn.execute(
+            f"DELETE FROM posting_snapshots WHERE posting_id IN ({placeholders})",
+            expired_ids,
+        )
+        conn.execute(
+            f"DELETE FROM postings WHERE posting_id IN ({placeholders})",
+            expired_ids,
+        )
+        conn.commit()
+    stats["postings_expired"] = len(expired_ids)
+
+    # 4. VACUUM to reclaim disk space (requires autocommit mode)
+    old_isolation = conn.isolation_level
+    try:
+        conn.isolation_level = None
+        conn.execute("VACUUM")
+    finally:
+        conn.isolation_level = old_isolation
+
+    logger.info(
+        "Database cleanup: %d HTML nulled, %d snapshots pruned, %d postings expired",
+        stats["html_nulled"], stats["snapshots_pruned"], stats["postings_expired"],
+    )
+    return stats

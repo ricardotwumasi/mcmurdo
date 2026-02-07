@@ -136,7 +136,7 @@ def run_pipeline(dry_run: bool = False) -> dict:
                     snapshot = PostingSnapshot(
                         posting_id=posting_id,
                         content_text=raw.content_text,
-                        content_html=raw.content_html,
+                        content_html=None,
                         content_hash=content_hash,
                     )
                     db.insert_snapshot(conn, snapshot)
@@ -224,6 +224,17 @@ def run_pipeline(dry_run: bool = False) -> dict:
                 errors.append(msg)
         else:
             logger.warning("RESEND_API_KEY not set -- skipping notifications")
+
+        # -- Step 7: Database cleanup --
+        logger.info("=== Step 7: Database cleanup ===")
+        try:
+            expiry_days = pipeline_cfg.get("expiry_days", 90)
+            cleanup_stats = db.cleanup_database(conn, expiry_days=expiry_days)
+            logger.info("Cleanup stats: %s", json.dumps(cleanup_stats))
+        except Exception as exc:
+            msg = f"Database cleanup failed: {exc}"
+            logger.error(msg)
+            errors.append(msg)
 
         # Finalise pipeline run
         status = "completed" if not errors else "completed"

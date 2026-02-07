@@ -5,6 +5,7 @@ Uses a temporary in-memory SQLite database for isolation.
 
 import json
 import sqlite3
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -167,3 +168,89 @@ class TestDigest:
         # Should no longer appear in digest
         postings = db.get_postings_for_digest(conn, limit=50)
         assert len(postings) == 0
+
+
+class TestCleanup:
+    def test_nulls_content_html(self, conn, sample_posting):
+        db.upsert_posting(conn, sample_posting)
+        snapshot = PostingSnapshot(
+            posting_id=sample_posting.posting_id,
+            content_text="Some text",
+            content_html="<html>Big HTML blob</html>",
+            content_hash="hash1",
+        )
+        db.insert_snapshot(conn, snapshot)
+
+        stats = db.cleanup_database(conn)
+        assert stats["html_nulled"] == 1
+
+        row = conn.execute(
+            "SELECT content_html FROM posting_snapshots WHERE posting_id = ?",
+            (sample_posting.posting_id,),
+        ).fetchone()
+        assert row["content_html"] is None
+
+    def test_prunes_old_snapshots(self, conn, sample_posting):
+        db.upsert_posting(conn, sample_posting)
+        # Insert 5 snapshots with different timestamps
+        for i in range(5):
+            ts = (datetime.utcnow() - timedelta(hours=5 - i)).isoformat()
+            conn.execute(
+                """INSERT INTO posting_snapshots
+                   (posting_id, content_text, content_hash, fetched_at)
+                   VALUES (?, ?, ?, ?)""",
+                (sample_posting.posting_id, f"text {i}", f"hash{i}", ts),
+            )
+        conn.commit()
+
+        count_before = conn.execute(
+            "SELECT COUNT(*) FROM posting_snapshots"
+        ).fetchone()[0]
+        assert count_before == 5
+
+        stats = db.cleanup_database(conn)
+        assert stats["snapshots_pruned"] == 4
+
+        count_after = conn.execute(
+            "SELECT COUNT(*) FROM posting_snapshots"
+        ).fetchone()[0]
+        assert count_after == 1
+
+        # The remaining snapshot should be the most recent one (hash4)
+        row = conn.execute(
+            "SELECT content_hash FROM posting_snapshots WHERE posting_id = ?",
+            (sample_posting.posting_id,),
+        ).fetchone()
+        assert row["content_hash"] == "hash4"
+
+    def test_expires_closed_postings(self, conn, sample_posting):
+        db.upsert_posting(conn, sample_posting)
+        # Mark as closed with an old closing date
+        old_date = (datetime.utcnow() - timedelta(days=100)).strftime("%Y-%m-%d")
+        conn.execute(
+            "UPDATE postings SET open_status = 'closed', closing_date = ? WHERE posting_id = ?",
+            (old_date, sample_posting.posting_id),
+        )
+        conn.commit()
+
+        stats = db.cleanup_database(conn, expiry_days=90)
+        assert stats["postings_expired"] == 1
+
+        result = db.get_posting(conn, sample_posting.posting_id)
+        assert result is None
+
+    def test_does_not_expire_open_postings(self, conn, sample_posting):
+        db.upsert_posting(conn, sample_posting)
+        # Open posting with an old closing date -- should NOT be expired
+        old_date = (datetime.utcnow() - timedelta(days=100)).strftime("%Y-%m-%d")
+        conn.execute(
+            "UPDATE postings SET open_status = 'open', closing_date = ? WHERE posting_id = ?",
+            (old_date, sample_posting.posting_id),
+        )
+        conn.commit()
+
+        stats = db.cleanup_database(conn, expiry_days=90)
+        assert stats["postings_expired"] == 0
+
+        result = db.get_posting(conn, sample_posting.posting_id)
+        assert result is not None

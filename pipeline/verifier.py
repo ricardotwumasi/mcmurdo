@@ -95,7 +95,7 @@ def verify_posting(
         snapshot = PostingSnapshot(
             posting_id=posting.posting_id,
             content_text=text,
-            content_html=html,
+            content_html=None,
             content_hash=content_hash,
         )
         db.insert_snapshot(conn, snapshot)
